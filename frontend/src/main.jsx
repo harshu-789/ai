@@ -4,7 +4,11 @@ import './index.css'
 import App from './App.jsx'
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import Tickets from './pages/tickets.jsx'
+import TicketDetails from './pages/ticket.jsx'
+import Login from './pages/login.jsx'
 import CheckAuth from './components/check-auth.jsx'
+import Signup from './pages/signup.jsx'
+import Admin from './pages/admin.jsx'
 
 
 
@@ -15,6 +19,22 @@ createRoot(document.getElementById('root')).render(
 
     <Route path="/*" element={<CheckAuth protected = {true}>  
              <Tickets />
+</CheckAuth>    
+  } />
+   <Route path="/tickets/:id" element={<CheckAuth protected = {true}>  
+             <TicketDetails />
+</CheckAuth>    
+  } />
+   <Route path="/login" element={<CheckAuth protected = {false}>  
+             <Login />
+</CheckAuth>    
+  } />
+   <Route path="/signup" element={<CheckAuth protected = {false}>  
+             <Signup />
+</CheckAuth>    
+  } />
+   <Route path="/admin" element={<CheckAuth protected = {true}>  
+             <Admin />
 </CheckAuth>    
   } />
   </Routes>
