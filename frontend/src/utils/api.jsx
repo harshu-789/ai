@@ -6,11 +6,17 @@ export const api = async (url, options = {}) => {
     headers: {
       "Content-Type": "application/json",
       Authorization: token ? `Bearer ${token}` : "",
-      ...(options.headers || {})
-    }
+    },
   });
 
-  const data = await res.json().catch(() => null);
+  if (res.status === 401 || res.status === 403) {
+    alert("Invalid or expired token");
+     localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  window.location.href = "/login";
+  }
 
-  return { res, data };
+  return res.json();
 };
+
+

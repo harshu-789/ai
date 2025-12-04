@@ -4,7 +4,7 @@ import User from "../models/user.js";
 import { inngest } from "../inngest/client.js";
 
 export const signup = async (req, res) => {
-  const { email, password, skills = [] } = req.body;
+  const { email, password, skills = [] ,role = "user"} = req.body;
   try {
     const hashed =  await brcypt.hash(password, 10);
     const user = await User.create({ email, password: hashed, skills });
@@ -28,6 +28,10 @@ export const signup = async (req, res) => {
     res.status(500).json({ error: "Signup failed", details: error.message });
   }
 };
+
+
+
+
 
 export const login = async (req, res) => {
   const { email, password } = req.body;

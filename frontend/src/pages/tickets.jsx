@@ -1,11 +1,134 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+// import React, { useState, useEffect } from 'react';
+// import { Link } from 'react-router-dom';
+// import { api } from "../utils/api.jsx";
+
+
+
+// function Tickets() {
+//   const [form, setForm] = useState({ title: '', description: '' });
+//   const [loading, setLoading] = useState(false);
+//   const [tickets, setTickets] = useState([]);
+//   const token = localStorage.getItem('token');
+
+//   const api = import.meta.env.VITE_URL; // USE ONLY ONE ENV VAR
+
+//   const handleChange = (e) => {
+//     setForm({ ...form, [e.target.name]: e.target.value });
+//   };
+
+//   const fetchTickets = async () => {
+//     try {
+//       const res = await fetch(`${api}/api/tickets`, {
+//         method: 'GET',
+//         headers: {
+//           Authorization: `Bearer ${token}`,
+//         },
+//       });
+
+//       const data = await res.json();
+
+//       if (res.ok) {
+//         setTickets(data.tickets || []);
+//       } else {
+//         alert(data.message || 'Failed to fetch tickets');
+//       }
+//     } catch (error) {
+//       console.error('Failed to fetch tickets:', error);
+//     }
+//   };
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setLoading(true);
+
+//     try {
+//       const res = await fetch(`${API}/api/tickets`, {
+//         method: 'POST',
+//         headers: {
+//           'Content-Type': 'application/json',
+//           Authorization: `Bearer ${token}`,
+//         },
+//         body: JSON.stringify(form),
+//       });
+
+//       const data = await res.json();
+
+//       if (res.ok) {
+//         setForm({ title: '', description: '' });
+//         fetchTickets();
+//       } else {
+//         alert(data.message || 'Ticket creation failed');
+//       }
+//     } catch (err) {
+//       alert('Error creating ticket');
+//       console.error(err);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     fetchTickets();
+//   }, []);
+
+//   return (
+//     <div className="p-4 max-w-3xl mx-auto">
+//       <h2 className="text-2xl font-bold mb-4">Create Ticket</h2>
+
+//       <form onSubmit={handleSubmit} className="space-y-3 mb-8">
+//         <input
+//           name="title"
+//           value={form.title}
+//           onChange={handleChange}
+//           placeholder="Ticket Title"
+//           className="input input-bordered w-full"
+//           required
+//         />
+//         <textarea
+//           name="description"
+//           value={form.description}
+//           onChange={handleChange}
+//           placeholder="Ticket Description"
+//           className="textarea textarea-bordered w-full"
+//           required
+//         />
+//         <button className="btn btn-primary" type="submit" disabled={loading}>
+//           {loading ? 'Submitting...' : 'Submit Ticket'}
+//         </button>
+//       </form>
+
+//       <h2 className="text-xl font-semibold mb-2">All Tickets</h2>
+//       <div className="space-y-3">
+//         {tickets.map((ticket) => (
+//           <Link
+//             key={ticket._id}
+//             className="card shadow-md p-4 bg-gray-800"
+//             to={`/tickets/${ticket._id}`}
+//           >
+//             <h3 className="font-bold text-lg">{ticket.title}</h3>
+//             <p className="text-sm">{ticket.description}</p>
+//             <p className="text-sm text-gray-500">
+//               Created At: {new Date(ticket.createdAt).toLocaleString()}
+//             </p>
+//           </Link>
+//         ))}
+//         {tickets.length === 0 && <p>No tickets submitted yet.</p>}
+//       </div>
+//     </div>
+//   );
+// }
+
+// export default Tickets;
+
+
+import React, { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../utils/api.jsx";
 
 function Tickets() {
-  const [form, setForm] = useState({ title: '', description: '' });
+  const [form, setForm] = useState({ title: "", description: "" });
   const [loading, setLoading] = useState(false);
   const [tickets, setTickets] = useState([]);
-  const token = localStorage.getItem('token');
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -13,46 +136,27 @@ function Tickets() {
 
   const fetchTickets = async () => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_URL}/tickets`, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTickets(data.tickets || []);
-      } else {
-        alert(data.message || 'Failed to fetch tickets');
-        console.error('Failed to fetch tickets');
-      }
+      const data = await api("/tickets");
+      setTickets(data.tickets || []);
     } catch (error) {
-      console.error('Failed to fetch tickets:', error);
+      alert("Failed to load tickets");
     }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+
     try {
-      const res = await fetch(`${import.meta.env.VITE_SERVER_URL}/tickets`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
+      await api("/tickets", {
+        method: "POST",
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (res.ok) {
-        setForm({ title: '', description: '' });
-        fetchTickets();
-      } else {
-        alert(data.message || 'Ticket creation failed');
-      }
+
+      setForm({ title: "", description: "" });
+      fetchTickets();
     } catch (err) {
-      alert('Error creating ticket');
-      console.error(err);
+      alert("Ticket creation failed");
     } finally {
       setLoading(false);
     }
@@ -75,6 +179,7 @@ function Tickets() {
           className="input input-bordered w-full"
           required
         />
+
         <textarea
           name="description"
           value={form.description}
@@ -83,12 +188,14 @@ function Tickets() {
           className="textarea textarea-bordered w-full"
           required
         />
+
         <button className="btn btn-primary" type="submit" disabled={loading}>
-          {loading ? 'Submitting...' : 'Submit Ticket'}
+          {loading ? "Submitting..." : "Submit Ticket"}
         </button>
       </form>
 
       <h2 className="text-xl font-semibold mb-2">All Tickets</h2>
+
       <div className="space-y-3">
         {tickets.map((ticket) => (
           <Link
@@ -103,6 +210,7 @@ function Tickets() {
             </p>
           </Link>
         ))}
+
         {tickets.length === 0 && <p>No tickets submitted yet.</p>}
       </div>
     </div>
@@ -110,3 +218,4 @@ function Tickets() {
 }
 
 export default Tickets;
+

@@ -16,7 +16,7 @@ const handleLogin = async (e) =>{
   e.preventDefault()
   setLoading(true)
   try {
-    const res = await fetch (`${import.meta.env.VITE_URL}/auth/login`, {
+    const res = await fetch (`${import.meta.env.VITE_URL}/api/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -27,7 +27,8 @@ const handleLogin = async (e) =>{
   if(res.ok){
     localStorage.setItem('token', data.token)
     localStorage.setItem('user', JSON.stringify(data.user))
-    navigate('/')
+    window.dispatchEvent(new Event("storage"));
+    navigate('/tickets')
   } else{
      alert(data.message || "Login failed");
   }
