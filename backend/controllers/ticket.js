@@ -132,11 +132,14 @@ export const updateTicket = async (req, res) => {
 };
 
 
-export const adminGetAllTickets = async (req, res) => {
-  const tickets = await Ticket.find({})
-    .populate("createdBy", "email")
-    .populate("assignedTo", "email")
-    .sort({ createdAt: -1 });
+export const getAllTicketsForAdmin = async (req, res) => {
+  try {
+    const tickets = await Ticket.find()
+      .populate("createdBy", "email")
+      .sort({ createdAt: -1 });
 
-  res.json({ tickets });
+    res.json({ success: true, tickets });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
 };
