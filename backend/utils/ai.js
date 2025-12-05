@@ -3,7 +3,7 @@ import { createAgent, gemini } from "@inngest/agent-kit";
 const analyzeTicket = async (ticket) => {
   const supportAgent = createAgent({
     model: gemini({
-      model: "gemini-1.5-flash-8b",
+      model: "gemini-pro",
       apiKey: process.env.GEMINI_API_KEY,
     }),
     name: "AI Ticket Triage Assistant",
@@ -48,8 +48,10 @@ Ticket information:
 
 - Title: ${ticket.title}
 - Description: ${ticket.description}`);
+console.log("AI RAW RESPONSE:", JSON.stringify(response, null, 2));
 
-  const raw = response.output[0].context;
+
+  const raw = response.output[0].content;
 
   try {
     const match = raw.match(/```json\s*([\s\S]*?)\s*```/i);
@@ -62,3 +64,6 @@ Ticket information:
 };
 
 export default analyzeTicket;
+
+
+

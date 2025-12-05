@@ -14,10 +14,10 @@ export const onUserSignup = inngest.createFunction(
         if (!userObject) {
           throw new NonRetriableError("User no longer exists in our database");
         }
-        return userObject;
+        return userObject.toJSON();
       });
 
-      await setp.run("send-welcome-email", async () => {
+      await step.run("send-welcome-email", async () => {
         const subject = `Welcome to the app`;
         const message = `Hi,
             \n\n

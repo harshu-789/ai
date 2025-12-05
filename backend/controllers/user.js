@@ -1,4 +1,4 @@
-import brcypt from "bcrypt";
+import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 import { inngest } from "../inngest/client.js";
@@ -6,8 +6,8 @@ import { inngest } from "../inngest/client.js";
 export const signup = async (req, res) => {
   const { email, password, skills = [] ,role = "user"} = req.body;
   try {
-    const hashed =  await brcypt.hash(password, 10);
-    const user = await User.create({ email, password: hashed, skills });
+    const hashed =  await bcrypt.hash(password, 10);
+    const user = await User.create({ email, password: hashed, skills , role});
 
     //Fire inngest event
 
@@ -40,7 +40,7 @@ export const login = async (req, res) => {
     const user =  await User.findOne({ email });
     if (!user) return res.status(401).json({ error: "User not found" });
 
-    const isMatch = await brcypt.compare(password, user.password);
+    const isMatch = await bcrypt.compare(password, user.password);
 
     if (!isMatch) {
       return res.status(401).json({ error: "Invalid credentials" });
@@ -71,24 +71,24 @@ export const logout = async (req, res) => {
 };
 
 export const updateUser = async (req, res) => {
-  const { skills = [], role, email } = req.body;
   try {
-    if (req.user?.role !== "admin") {
-      return res.status(403).json({ eeor: "Forbidden" });
-    }
-    const user = await User.findOne({ email });
-    if (!user) return res.status(401).json({ error: "User not found" });
+    const { email, role, skills } = req.body;
 
-    await User.updateOne(
+    const user = await User.findOneAndUpdate(
       { email },
-      { skills: skills.length ? skills : user.skills, role }
+      { role, skills },
+      { new: true }
     );
-    return res.json({ message: "User updated successfully" });
+
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    return res.json({ message: "User updated", user });
+
   } catch (error) {
-    res.status(500).json({ error: "Update failed", details: error.message });
+    console.error("Update user error:", error);
+    return res.status(500).json({ message: "Internal server error" });
   }
 };
-
 export const getUsers = async (req, res) => {
   try {
     if (req.user.role !== "admin") {

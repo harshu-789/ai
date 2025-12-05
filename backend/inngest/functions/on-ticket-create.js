@@ -1,9 +1,9 @@
-// import { inngest } from "../client.js";
-// import Ticket from "../../models/ticket.js";
-// import User from "../../models/user.js";
-// import { NonRetriableError } from "inngest";
-// import { sendMail } from "../../utils/mailer.js";
-// import analyzeTicket from "../../utils/ai.js";
+import { inngest } from "../client.js";
+import Ticket from "../../models/ticket.js";
+import User from "../../models/user.js";
+import { NonRetriableError } from "inngest";
+import { sendMail } from "../../utils/mailer.js";
+import analyzeTicket from "../../utils/ai.js";
 
 // export const onTicketCreated = inngest.createFunction(
 //   { id: "on-ticket-created", retries: 2 },
@@ -85,13 +85,6 @@
 
 
 
-import { inngest } from "../client.js";
-import Ticket from "../../models/ticket.js";
-import User from "../../models/user.js";
-import { NonRetriableError } from "inngest";
-import { sendMail } from "../../utils/mailer.js";
-import analyzeTicket from "../../utils/ai.js";
-
 export const onTicketCreated = inngest.createFunction(
   { id: "on-ticket-created", retries: 2 },
   { event: "ticket/created" },
@@ -99,56 +92,65 @@ export const onTicketCreated = inngest.createFunction(
     try {
       const { ticketId } = event.data;
 
-      // Step: Fetch, update, AI, assign moderator, and notify email all in one step
-      const updatedTicket = await step.run("process-ticket", async () => {
-        // Fetch ticket
+      // 1️⃣ Fetch the ticket inside step.run
+      const ticketData = await step.run("fetch-ticket", async () => {
         const ticket = await Ticket.findById(ticketId);
         if (!ticket) throw new NonRetriableError("Ticket not found");
+        return ticket.toJSON();   // 🔥 MUST convert to safe JSON
+      });
 
-        // Initial status
-        ticket.status = "TODO";
+      // 2️⃣ Run AI analysis OUTSIDE step.run to avoid nested step.* behavior
+      const aiResponse = await analyzeTicket(ticketData);
 
-        // AI analysis
-        const aiResponse = await analyzeTicket(ticket);
-        let relatedSkills = [];
+      // 3️⃣ Process & update inside a new clean step
+      const updatedTicket = await step.run("update-ticket", async () => {
+        const t = await Ticket.findById(ticketId);
+
+        t.status = "TODO";
         if (aiResponse) {
-          ticket.priority = ["low", "medium", "high"].includes(aiResponse.priority)
-            ? aiResponse.priority
-            : "medium";
-          ticket.helpfulNotes = aiResponse.helpfulNotes;
-          ticket.status = "IN_PROGRESS";
-          ticket.relatedSkills = aiResponse.relatedSkills;
-          relatedSkills = aiResponse.relatedSkills;
+          t.priority = aiResponse.priority || "medium";
+          t.helpfulNotes = aiResponse.helpfulNotes;
+          t.relatedSkills = aiResponse.relatedSkills;
+          t.status = "IN_PROGRESS";
         }
 
         // Assign moderator/admin
-        let user = await User.findOne({
-          role: "moderator",
-          skills: { $elemMatch: { $regex: relatedSkills.join("|"), $options: "i" } },
-        });
+        let user = null;
+
+        if (aiResponse?.relatedSkills?.length) {
+          user = await User.findOne({
+            role: "moderator",
+            skills: { $elemMatch: { $regex: aiResponse.relatedSkills.join("|"), $options: "i" } }
+          });
+        }
+
         if (!user) {
           user = await User.findOne({ role: "admin" });
         }
-        ticket.assignedTo = user?._id || null;
 
-        // Save all changes at once
-        await ticket.save();
+        t.assignedTo = user?._id || null;
 
-        // Send email notification
-        if (user) {
-          await sendMail(
-            user.email,
-            "Ticket Assigned",
-            `A new ticket is assigned to you: ${ticket.title}`
-          );
-        }
+        await t.save();
 
-        return ticket; // return updated ticket if needed
+        // Return SAFE DATA ONLY
+        return t.toJSON();   // 🔥 no mongoose doc
       });
 
-      return { success: true, ticket: updatedTicket };
+      // 4️⃣ Send email OUTSIDE step.run (AI and mailers should not run inside steps)
+      if (updatedTicket.assignedTo) {
+        const assignedUser = await User.findById(updatedTicket.assignedTo);
+        if (assignedUser) {
+          await sendMail(
+            assignedUser.email,
+            "Ticket Assigned",
+            `A new ticket was assigned to you: ${updatedTicket.title}`
+          );
+        }
+      }
+
+      return { success: true };
     } catch (err) {
-      console.error("❌ Error processing ticket:", err.message);
+      console.error("❌ Error processing ticket:", err);
       return { success: false };
     }
   }
