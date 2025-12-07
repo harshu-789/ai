@@ -3,61 +3,74 @@ import { createAgent, gemini } from "@inngest/agent-kit";
 const analyzeTicket = async (ticket) => {
   const supportAgent = createAgent({
     model: gemini({
-      model: "gemini-1.5-flash-8b",
+      model: "gemini-1.0-pro",
       apiKey: process.env.GEMINI_API_KEY,
     }),
     name: "AI Ticket Triage Assistant",
-    system: `You are an expert AI assistant that processes technical support tickets. 
+    system: `
+You are an advanced Support Ticket AI used in a real production system.
 
-Your job is to:
-1. Summarize the issue.
-2. Estimate its priority.
-3. Provide helpful notes and resource links for human moderators.
-4. List relevant technical skills required.
+### RULES YOU MUST FOLLOW:
+- Output ONLY valid JSON.
+- No markdown, no code fences, no comments.
+- Keys must ALWAYS exist and be non-empty.
+- relatedSkills MUST always be an array of lowercase technical skill names.
+- priority must be one of: "low", "medium", "high".
 
-IMPORTANT:
-- Respond with *only* valid raw JSON.
-- Do NOT include markdown, code fences, comments, or any extra formatting.
-- The format must be a raw JSON object.
+### PRIORITY RULE:
+- HIGH = data loss, app crash, no login, payment failure, error codes
+- MEDIUM = broken UI, missing features, performance degradation
+- LOW = minor UI issues, cosmetic bugs, suggestions
 
-Repeat: Do not wrap your output in markdown or code fences.`,
+### HELPFUL NOTES SHOULD:
+- Explain root cause possibilities
+- Give step-by-step debugging instructions
+- Provide links to documentation
+- Include relevant logs to check
+- Be actionable for junior moderators
+    `.trim(),
   });
 
-  const response =
-    await supportAgent.run(`You are a ticket triage agent. Only return a strict JSON object with no extra text, headers, or markdown.
-        
-Analyze the following support ticket and provide a JSON object with:
+  const prompt = `
+Analyze the following support ticket and return STRICT valid JSON ONLY.
 
-- summary: A short 1-2 sentence summary of the issue.
-- priority: One of "low", "medium", or "high".
-- helpfulNotes: A detailed technical explanation that a moderator can use to solve this issue. Include useful external links or resources if possible.
-- relatedSkills: An array of relevant skills required to solve the issue (e.g., ["React", "MongoDB"]).
+Ticket:
+- Title: ${ticket.title}
+- Description: ${ticket.description}
 
-Respond ONLY in this JSON format and do not include any other text or markdown in the answer:
+The output MUST match EXACTLY this shape:
 
 {
-"summary": "Short summary of the ticket",
-"priority": "high",
-"helpfulNotes": "Here are useful tips...",
-"relatedSkills": ["React", "Node.js"]
+  "summary": "1–2 sentence summary",
+  "priority": "low | medium | high",
+  "helpfulNotes": "Detailed explanation with steps & links",
+  "relatedSkills": ["react", "node.js", "mongodb"]
 }
+  `.trim();
 
----
+  const response = await supportAgent.run(prompt);
 
-Ticket information:
+  const raw = response?.output?.[0]?.content;
 
-- Title: ${ticket.title}
-- Description: ${ticket.description}`);
-
-  const raw = response.output[0].context;
+  if (!raw) {
+    console.error("❌ AI returned empty response:", response);
+    return null;
+  }
 
   try {
-    const match = raw.match(/```json\s*([\s\S]*?)\s*```/i);
-    const jsonString = match ? match[1] : raw.trim();
-    return JSON.parse(jsonString);
-  } catch (e) {
-    console.log("Failed to parse JSON from AI response" + e.message);
-    return null; // watch out for this
+    const parsed = JSON.parse(raw);
+
+    // Strong validation
+    if (!parsed.summary || !parsed.helpfulNotes || !parsed.relatedSkills) {
+      throw new Error("Missing required JSON fields");
+    }
+
+    parsed.relatedSkills = parsed.relatedSkills.map(s => s.toLowerCase());
+
+    return parsed;
+  } catch (err) {
+    console.error("❌ FAILED TO PARSE AI JSON:", raw, err.message);
+    return null;
   }
 };
 

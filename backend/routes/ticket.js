@@ -10,4 +10,5 @@ router.post("/", authenticate, createTicket);
 router.get("/:id", authenticate, getTicket);
 
 
+
 export default router;

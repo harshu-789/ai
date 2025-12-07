@@ -72,23 +72,31 @@ export const logout = async (req, res) => {
 
 export const updateUser = async (req, res) => {
   try {
-    const { email, role, skills } = req.body;
+    const { role, skills } = req.body;
+    const userId = req.params.id;
 
-    const user = await User.findOneAndUpdate(
-      { email },
-      { role, skills },
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      {
+        role,
+        skills,
+      },
       { new: true }
-    );
+    ).select("-password");
 
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!updatedUser)
+      return res.status(404).json({ message: "User not found" });
 
-    return res.json({ message: "User updated", user });
-
+    res.json({
+      message: "User updated successfully",
+      user: updatedUser,
+    });
   } catch (error) {
     console.error("Update user error:", error);
-    return res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ message: "Internal server error" });
   }
 };
+
 export const getUsers = async (req, res) => {
   try {
     if (req.user.role !== "admin") {

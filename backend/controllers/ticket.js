@@ -1,45 +1,35 @@
 import { inngest } from "../inngest/client.js";
 import Ticket from "../models/ticket.js";
 
-// CREATE TICKET
 export const createTicket = async (req, res) => {
   try {
     const { title, description } = req.body;
 
-    if (!title || !description) {
-      return res.status(400).json({ message: "Title and description are required" });
-    }
+    if (!title || !description)
+      return res.status(400).json({ message: "Title and description required." });
 
-    // Create ticket with blank helpfulNotes (temporary)
-    const newTicket = await Ticket.create({
+    // Create the ticket without assignment
+    const ticket = await Ticket.create({
       title,
       description,
       createdBy: req.user._id,
-      status: "TODO",
-      priority: "medium",
-      helpfulNotes: "",
-      relatedSkills: [],
+      status: "TODO"
     });
 
-    // Trigger Inngest AI Event
+    // Fire the event so Inngest can process AI + auto-assign
     await inngest.send({
       name: "ticket/created",
-      data: {
-        ticketId: newTicket._id.toString(),
-        title,
-        description,
-      },
+      data: { ticketId: ticket._id.toString() }
     });
 
-    return res.status(201).json({
-      message: "Ticket created successfully",
-      ticket: newTicket,
-    });
-  } catch (error) {
-    console.error("Error creating ticket:", error);
-    return res.status(500).json({ message: "Internal Server Error" });
+    res.status(201).json({ message: "Ticket created & processing started.", ticket });
+
+  } catch (err) {
+    console.error("Ticket creation failed:", err);
+    res.status(500).json({ message: "Server error creating ticket." });
   }
 };
+
 
 
 // GET ALL TICKETS
@@ -110,26 +100,49 @@ export const getTicket = async (req, res) => {
 export const updateTicket = async (req, res) => {
   try {
     const user = req.user;
+    const ticketId = req.params.id;
 
-    if (user.role !== "user") {
-      const updatedTicket = await Ticket.findByIdAndUpdate(
-        req.params.id,
-        req.body,
-        { new: true }
-      ).populate("assignedTo", ["email", "_id"]);
+    let ticket = await Ticket.findById(ticketId);
 
-      if (!updatedTicket) {
-        return res.status(404).json({ message: "Ticket not found" });
+    if (!ticket) {
+      return res.status(404).json({ message: "Ticket not found" });
+    }
+
+    // USER CAN ONLY UPDATE THEIR OWN TICKET (title, description)
+    if (user.role === "user") {
+      if (ticket.createdBy.toString() !== user._id.toString()) {
+        return res.status(403).json({ message: "You cannot update this ticket" });
+      }
+
+      // restrict fields users can update
+      const allowedFields = ["title", "description"];
+      for (let key of Object.keys(req.body)) {
+        if (!allowedFields.includes(key)) {
+          return res.status(403).json({ message: "You cannot update this field" });
+        }
       }
     }
 
-    return res.status(200).json({ message: "Ticket updated successfully" });
+    // ADMIN + MODERATOR → full update allowed
+    const updatedTicket = await Ticket.findByIdAndUpdate(
+      ticketId,
+      req.body,
+      { new: true }
+    )
+      .populate("assignedTo", ["email", "_id"])
+      .populate("createdBy", ["email", "_id"]);
+
+    return res.status(200).json({
+      message: "Ticket updated successfully",
+      ticket: updatedTicket,
+    });
 
   } catch (error) {
     console.error("Error updating ticket:", error);
     return res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
 
 
 export const getAllTicketsForAdmin = async (req, res) => {

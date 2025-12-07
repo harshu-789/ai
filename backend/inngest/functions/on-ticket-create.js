@@ -1,95 +1,96 @@
 import { inngest } from "../client.js";
 import Ticket from "../../models/ticket.js";
 import User from "../../models/user.js";
-import { NonRetriableError } from "inngest";
-import { sendMail } from "../../utils/mailer.js";
 import analyzeTicket from "../../utils/ai.js";
+import { sendMail } from "../../utils/mailer.js";
+import { NonRetriableError } from "inngest";
+
+function scoreModerator(mod, requiredSkills) {
+  const modSkills = (mod.skills || []).map(s => s.toLowerCase());
+  let score = 0;
+
+  requiredSkills.forEach(skill => {
+    modSkills.forEach(ms => {
+      if (ms.includes(skill) || skill.includes(ms)) score += 1;
+    });
+  });
+
+  return score;
+}
 
 export const onTicketCreated = inngest.createFunction(
-  { id: "on-ticket-created", retries: 2 },
+  { id: "ticket-ai-analysis-and-assignment", retries: 2 },
   { event: "ticket/created" },
+
   async ({ event, step }) => {
-    try {
-      const { ticketId } = event.data;
+    const { ticketId } = event.data;
 
-      // Fetch ticket
-      const ticket = await step.run("fetch-ticket", async () => {
-        const ticketObject = await Ticket.findById(ticketId);
+    // 1️⃣ Load ticket
+    const ticket = await Ticket.findById(ticketId).populate("createdBy");
+    if (!ticket) throw new NonRetriableError("Ticket not found");
 
-        if (!ticketObject) {
-          throw new NonRetriableError("Ticket not found");
-        }
+    // 2️⃣ AI analysis (outside step)
+    const ai = await analyzeTicket({
+      title: ticket.title,
+      description: ticket.description,
+    });
 
-        return ticketObject;
-      });
-
-      // Initialize status
-      await step.run("update-ticket-status", async () => {
-        await Ticket.findByIdAndUpdate(ticket._id, { status: "TODO" });
-      });
-
-      // AI Analysis
-      const aiResponse = await analyzeTicket(ticket);
-
-      const relatedskills = await step.run("ai-processing", async () => {
-        if (!aiResponse) return [];
-
-        await Ticket.findByIdAndUpdate(ticket._id, {
-          priority: ["low", "medium", "high"].includes(aiResponse.priority)
-            ? aiResponse.priority
-            : "medium",
-          helpfulNotes: aiResponse.helpfulNotes,
-          relatedSkills: aiResponse.relatedSkills,
-          status: "IN_PROGRESS",
-        });
-
-        return aiResponse.relatedSkills;
-      });
-
-      // Assign moderator
-      const moderator = await step.run("assign-moderator", async () => {
-        let user = null;
-
-        if (relatedskills.length > 0) {
-          user = await User.findOne({
-            role: "moderator",
-            skills: {
-              $elemMatch: {
-                $regex: relatedskills.join("|"),
-                $options: "i",
-              },
-            },
-          });
-        }
-
-        if (!user) {
-          user = await User.findOne({ role: "admin" });
-        }
-
-        await Ticket.findByIdAndUpdate(ticket._id, {
-          assignedTo: user?._id || null,
-        });
-
-        return user;
-      });
-
-      // Email Notification
-      await step.run("send-email-notification", async () => {
-        if (moderator) {
-          const finalTicket = await Ticket.findById(ticket._id);
-
-          await sendMail(
-            moderator.email,
-            "Ticket Assigned",
-            `A new ticket is assigned to you: ${finalTicket.title}`
-          );
-        }
-      });
-
-      return { success: true };
-    } catch (err) {
-      console.error("❌ Error running step:", err.message);
-      return { success: false };
+    if (!ai) {
+      throw new NonRetriableError("AI failed to generate JSON");
     }
+
+    console.log("🤖 AI RESULT:", ai);
+
+    // 3️⃣ Get all moderators
+    const moderators = await User.find({ role: "moderator" });
+
+    // Weighted best match
+    let bestModerator = null;
+    let bestScore = 0;
+
+    moderators.forEach(mod => {
+      const score = scoreModerator(mod, ai.relatedSkills);
+      if (score > bestScore) {
+        bestScore = score;
+        bestModerator = mod;
+      }
+    });
+
+    // Fallback if no skill matches
+    if (!bestModerator) {
+      bestModerator = moderators[0] || null;
+    }
+
+    // 4️⃣ Update ticket inside step.run
+    await step.run("Save AI details + assignment", async () => {
+      ticket.summary = ai.summary;
+      ticket.priority = ai.priority;
+      ticket.helpfulNotes = ai.helpfulNotes;
+      ticket.relatedSkills = ai.relatedSkills;
+      ticket.assignedTo = bestModerator?._id || null;
+
+      await ticket.save();
+    });
+
+    // 5️⃣ Send email OUTSIDE step.run
+    if (bestModerator) {
+      await sendMail({
+        to: bestModerator.email,
+        subject: `New Ticket Assigned: ${ticket.title}`,
+        html: `
+          <h3>You have been assigned a ticket</h3>
+          <p><b>Summary:</b> ${ai.summary}</p>
+          <p><b>Priority:</b> ${ai.priority}</p>
+          <p><b>Helpful Notes:</b> ${ai.helpfulNotes}</p>
+          <p><b>Matched Skills:</b> ${ai.relatedSkills.join(", ")}</p>
+        `,
+      });
+    }
+
+    return {
+      success: true,
+      priority: ai.priority,
+      assignedTo: bestModerator?.email || "No moderators found",
+    };
   }
 );
