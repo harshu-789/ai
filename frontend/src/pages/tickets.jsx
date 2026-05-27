@@ -1,6 +1,12 @@
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../utils/api.jsx";
+
+const priorityClass = {
+  high: "badge-error",
+  medium: "badge-warning",
+  low: "badge-success",
+};
 
 function Tickets() {
   const [form, setForm] = useState({ title: "", description: "" });
@@ -13,10 +19,10 @@ function Tickets() {
 
   const fetchTickets = async () => {
     try {
-      const data = await api("/api/tickets");  // FIXED ROUTE
+      const data = await api("/api/tickets");
       setTickets(data.tickets || []);
-    } catch (error) {
-      alert("Failed to load tickets");
+    } catch (err) {
+      alert(err.message || "Failed to load tickets");
     }
   };
 
@@ -33,7 +39,7 @@ function Tickets() {
       setForm({ title: "", description: "" });
       fetchTickets();
     } catch (err) {
-      alert("Ticket creation failed");
+      alert(err.message || "Ticket creation failed");
     } finally {
       setLoading(false);
     }
@@ -62,7 +68,7 @@ function Tickets() {
           value={form.description}
           onChange={handleChange}
           placeholder="Ticket Description"
-          className="textarea textarea-bordered w-full"
+          className="textarea textarea-bordered w-full min-h-32"
           required
         />
 
@@ -74,33 +80,58 @@ function Tickets() {
       <h2 className="text-xl font-semibold mb-2">All Tickets</h2>
 
       <div className="space-y-3">
-        {tickets.map((ticket) => (
-          <Link
-            key={ticket._id}
-            className="card shadow-md p-4 bg-gray-800"
-            to={`/tickets/${ticket._id}`}
-          >
-            <h3 className="font-bold text-lg">{ticket.title}</h3>
+        {tickets.map((ticket) => {
+          const priority = ticket.priority || "medium";
 
-            <p className="text-sm">{ticket.description}</p>
+          return (
+            <Link
+              key={ticket._id}
+              className="card shadow-md p-4 bg-gray-800"
+              to={`/tickets/${ticket._id}`}
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <h3 className="font-bold text-lg">{ticket.title}</h3>
+                <span className={`badge ${priorityClass[priority] || "badge-warning"}`}>
+                  {priority}
+                </span>
+              </div>
 
-            {ticket.priority && (
-              <p className="text-sm text-yellow-400">
-                Priority: {ticket.priority}
+              <p className="text-sm mt-2 line-clamp-2">{ticket.description}</p>
+
+              <p className="text-sm text-gray-300 mt-2">
+                Status: {ticket.status || "TODO"}
               </p>
-            )}
 
-            {ticket.assignedTo && (
-              <p className="text-sm text-blue-300">
-                Assigned To: {ticket.assignedTo.email}
+              {ticket.relatedSkills?.length > 0 && (
+                <p className="text-sm text-green-300">
+                  Related Skills: {ticket.relatedSkills.join(", ")}
+                </p>
+              )}
+
+              {ticket.summary && (
+                <p className="text-sm text-gray-300 truncate">
+                  Summary: {ticket.summary}
+                </p>
+              )}
+
+              {ticket.suggestedReply && (
+                <p className="text-sm text-blue-200 truncate">
+                  Suggested Reply: {ticket.suggestedReply}
+                </p>
+              )}
+
+              {ticket.assignedTo && (
+                <p className="text-sm text-blue-300">
+                  Assigned To: {ticket.assignedTo.email}
+                </p>
+              )}
+
+              <p className="text-sm text-gray-500">
+                Created At: {new Date(ticket.createdAt).toLocaleString()}
               </p>
-            )}
-
-            <p className="text-sm text-gray-500">
-              Created At: {new Date(ticket.createdAt).toLocaleString()}
-            </p>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
 
         {tickets.length === 0 && <p>No tickets submitted yet.</p>}
       </div>

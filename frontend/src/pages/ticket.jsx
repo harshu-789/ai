@@ -1,7 +1,13 @@
-import React, { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import { useParams } from "react-router-dom";
 import { api } from "../utils/api.jsx";
+
+const priorityClass = {
+  high: "badge-error",
+  medium: "badge-warning",
+  low: "badge-success",
+};
 
 function TicketDetails() {
   const { id } = useParams();
@@ -11,10 +17,10 @@ function TicketDetails() {
   useEffect(() => {
     const fetchTicket = async () => {
       try {
-        const data = await api(`/api/tickets/${id}`);  // FIXED ROUTE
+        const data = await api(`/api/tickets/${id}`);
         setTicket(data.ticket);
-      } catch (error) {
-        alert("Failed to fetch ticket details");
+      } catch (err) {
+        alert(err.message || "Failed to fetch ticket details");
       } finally {
         setLoading(false);
       }
@@ -26,25 +32,36 @@ function TicketDetails() {
   if (loading) return <div className="text-center mt-10">Loading ticket...</div>;
   if (!ticket) return <div className="text-center mt-10">Ticket not found</div>;
 
+  const priority = ticket.priority || "medium";
+
   return (
     <div className="max-w-3xl mx-auto p-4">
       <h2 className="text-2xl font-bold mb-4">Ticket Details</h2>
 
       <div className="card bg-gray-800 shadow p-4 space-y-4">
-        <h3 className="text-xl font-semibold">{ticket.title}</h3>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h3 className="text-xl font-semibold">{ticket.title}</h3>
+          <span className={`badge ${priorityClass[priority] || "badge-warning"}`}>
+            {priority}
+          </span>
+        </div>
+
+        {ticket.summary && (
+          <div className="rounded bg-gray-900 p-3">
+            <h4 className="font-semibold">AI Summary</h4>
+            <p>{ticket.summary}</p>
+          </div>
+        )}
 
         <div className="prose max-w-none">
           <ReactMarkdown>{ticket.description}</ReactMarkdown>
         </div>
 
-        {/* Metadata Section */}
         <div className="divider">Metadata</div>
 
-        <p><strong>Status:</strong> {ticket.status}</p>
-
-        {ticket.priority && (
-          <p><strong>Priority:</strong> {ticket.priority}</p>
-        )}
+        <p>
+          <strong>Status:</strong> {ticket.status || "TODO"}
+        </p>
 
         {ticket.relatedSkills?.length > 0 && (
           <p>
@@ -54,15 +71,26 @@ function TicketDetails() {
 
         {ticket.helpfulNotes && (
           <div>
-            <strong>Helpful Notes:</strong>
+            <strong>Moderator Notes:</strong>
             <div className="prose max-w-none rounded mt-2">
               <ReactMarkdown>{ticket.helpfulNotes}</ReactMarkdown>
             </div>
           </div>
         )}
 
+        {ticket.suggestedReply && (
+          <div className="rounded bg-gray-900 p-3">
+            <h4 className="font-semibold">Suggested Reply</h4>
+            <div className="prose max-w-none mt-2">
+              <ReactMarkdown>{ticket.suggestedReply}</ReactMarkdown>
+            </div>
+          </div>
+        )}
+
         {ticket.assignedTo && (
-          <p><strong>Assigned To:</strong> {ticket.assignedTo.email}</p>
+          <p>
+            <strong>Assigned To:</strong> {ticket.assignedTo.email}
+          </p>
         )}
 
         {ticket.createdAt && (

@@ -4,8 +4,8 @@ export const sendMail = async (to, subject, text) => {
   try {
     const transporter = nodemailer.createTransport({
       host: process.env.MAILTRAP_SMTP_HOST,
-      port: process.env.MAILTRAP_SMTP_PORT,
-      secure: false, // true for 465, false for other ports
+      port: Number(process.env.MAILTRAP_SMTP_PORT || 2525),
+      secure: false,
       auth: {
         user: process.env.MAILTRAP_SMTP_USER,
         pass: process.env.MAILTRAP_SMTP_PASS,
@@ -13,7 +13,7 @@ export const sendMail = async (to, subject, text) => {
     });
 
     const info = await transporter.sendMail({
-      from: '"Inngest TMS',
+      from: process.env.MAIL_FROM || '"Ticket AI" <no-reply@ticket-ai.local>',
       to,
       subject,
       text,
@@ -22,7 +22,7 @@ export const sendMail = async (to, subject, text) => {
     console.log("Message sent:", info.messageId);
     return info;
   } catch (error) {
-    console.error("❌ Mail error", error.message);
+    console.error("Mail error", error.message);
     throw error;
   }
 };

@@ -1,101 +1,75 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
+import { api } from "../utils/api.jsx";
 
 function Admin() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [tickets, setTickets] = useState([]);
-
   const [searchQuery, setSearchQuery] = useState("");
   const [editingUser, setEditingUser] = useState(null);
+  const [formData, setFormData] = useState({ role: "", skills: "" });
 
-  const [formData, setFormData] = useState({
-    role: "",
-    skills: "",
-  });
-
-  // Fetch all users
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
+      const data = await api("/api/auth/users");
+      const nextUsers = Array.isArray(data) ? data : [];
 
-      const res = await fetch("http://localhost:3000/api/auth/users", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      setUsers(Array.isArray(data) ? data : []);
-      setFilteredUsers(Array.isArray(data) ? data : []);
+      setUsers(nextUsers);
+      setFilteredUsers(nextUsers);
     } catch (err) {
       console.error("Error fetching users:", err);
       setUsers([]);
       setFilteredUsers([]);
     }
-  };
+  }, []);
 
-  // Fetch all tickets
-  const fetchTickets = async () => {
+  const fetchTickets = useCallback(async () => {
     try {
-      const token = localStorage.getItem("token");
-
-      const res = await fetch("http://localhost:3000/api/tickets", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      setTickets(Array.isArray(data) ? data : []);
+      const data = await api("/api/tickets");
+      setTickets(Array.isArray(data.tickets) ? data.tickets : []);
     } catch (err) {
       console.error("Error fetching tickets:", err);
       setTickets([]);
     }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-    fetchTickets();
   }, []);
 
-  // Search users by email
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchUsers();
+      fetchTickets();
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [fetchTickets, fetchUsers]);
+
   const handleSearch = (e) => {
     const value = e.target.value;
     setSearchQuery(value);
 
-    const filtered = users.filter((u) =>
-      u.email?.toLowerCase().includes(value.toLowerCase())
+    setFilteredUsers(
+      users.filter((user) =>
+        user.email?.toLowerCase().includes(value.toLowerCase()),
+      ),
     );
-
-    setFilteredUsers(filtered);
   };
 
-  // Update user role & skills
   const handleUpdate = async () => {
     if (!editingUser) return;
 
     try {
-      const token = localStorage.getItem("token");
-
-      await fetch(
-        `http://localhost:3000/api/auth/users/${editingUser}/update`,
-        {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            role: formData.role,
-            skills: formData.skills.split(",").map((s) => s.trim()),
-          }),
-        }
-      );
+      await api(`/api/auth/users/${editingUser}/update`, {
+        method: "PUT",
+        body: JSON.stringify({
+          role: formData.role,
+          skills: formData.skills
+            .split(",")
+            .map((skill) => skill.trim())
+            .filter(Boolean),
+        }),
+      });
 
       setEditingUser(null);
-      fetchUsers(); // refresh list
+      fetchUsers();
     } catch (err) {
       console.error("Error updating user:", err);
     }
@@ -113,8 +87,7 @@ function Admin() {
         onChange={handleSearch}
       />
 
-      {/* USERS LIST */}
-      {Array.isArray(filteredUsers) && filteredUsers.length > 0 ? (
+      {filteredUsers.length > 0 ? (
         filteredUsers.map((user) => (
           <div key={user._id} className="bg-base-100 shadow rounded p-4 mb-4">
             <p>
@@ -127,7 +100,6 @@ function Admin() {
               <strong>Skills:</strong> {user.skills?.join(", ") || "None"}
             </p>
 
-            {/* If this user is being edited */}
             {editingUser === user._id ? (
               <div className="mt-4 space-y-2">
                 <select
@@ -188,18 +160,21 @@ function Admin() {
 
       <h2 className="text-xl font-bold mb-4">Tickets Overview</h2>
 
-      {Array.isArray(tickets) && tickets.length > 0 ? (
-        tickets.map((t) => (
-          <div key={t._id} className="bg-base-100 shadow p-4 rounded mb-4">
+      {tickets.length > 0 ? (
+        tickets.map((ticket) => (
+          <div key={ticket._id} className="bg-base-100 shadow p-4 rounded mb-4">
             <p>
-              <strong>Title:</strong> {t.title}
+              <strong>Title:</strong> {ticket.title}
             </p>
             <p>
-              <strong>Status:</strong> {t.status}
+              <strong>Priority:</strong> {ticket.priority || "medium"}
+            </p>
+            <p>
+              <strong>Status:</strong> {ticket.status || "TODO"}
             </p>
             <p>
               <strong>Assigned To:</strong>{" "}
-              {t.assignedTo?.email || "Unassigned"}
+              {ticket.assignedTo?.email || "Unassigned"}
             </p>
           </div>
         ))
